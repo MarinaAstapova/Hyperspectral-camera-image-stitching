@@ -21,15 +21,22 @@ the histogram below.
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-
+import cv2
+import os
 from skimage import data
 from skimage.filters import threshold_multiotsu
 
 # Setting the font size for all plots.
-matplotlib.rcParams['font.size'] = 9
 
-# The input image.
-image = data.camera()
+matplotlib.rcParams['font.size'] = 9
+try_use_gpu =False
+imgs = []
+# The input image
+pic_dir = ""
+for root, dirs, files in os.walk(pic_dir):
+    for file in files:
+        print(os.path.join(root, file))
+        imgs.append(cv2.imread(os.path.join(root, file)))
 
 # Applying multi-Otsu threshold for the default value, generating
 # three classes.
