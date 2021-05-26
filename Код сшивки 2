@@ -78,4 +78,4 @@ if __name__ == '__main__':
         main(sys.argv[1],sys.argv[2])
     except IndexError:
         print ("Please input two source images: ")
-        print ("For example: python Image_Stitching.py '/Users/linrl3/Desktop/picture/p1.jpg' '/Users/linrl3/Desktop/picture/p2.jpg'")
+        print ("For example: python Image_Stitching.py '/Users/...' '/Users/....jpg'")
