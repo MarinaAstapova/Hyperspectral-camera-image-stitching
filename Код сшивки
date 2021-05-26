@@ -1,0 +1,16 @@
+try_use_gpu =False
+imgs = []
+ 
+pic_dir = ''
+for root, dirs, files in os.walk(pic_dir):
+    for file in files:
+        print(os.path.join(root, file))
+        imgs.append(cv2.imread(os.path.join(root, file)))
+        #Output
+
+stitcher = cv2.createStitcher(try_use_gpu=try_use_gpu)
+retavol, pano = stitcher.stitch(imgs)
+result = cv2.resize(pano, (int(pano.shape[1]/2), int(pano.shape[0]/2)))
+
+#Save stitching results to folder
+cv2.imwrite('Panorama.jpg',result)
