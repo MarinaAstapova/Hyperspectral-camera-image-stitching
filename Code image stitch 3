@@ -1,0 +1,115 @@
+import sys
+import cv2
+import numpy as np
+import os
+#from google.colab.patches import cv2_imshow
+
+def draw_matches(img1, keypoints1, img2, keypoints2, matches):
+    r, c = img1.shape[:2]
+    r1, c1 = img2.shape[:2]
+
+    output_img = np.zeros((r + r1, max([c, c1]), 3), dtype='uint8')
+    output_img[:r, :c, :] = np.dstack([img1, img1, img1])
+    output_img[r:r+r1, :c1, :] = np.dstack([img2, img2, img2])
+
+    # Go over all of the matching points and extract them
+
+    for match in matches:
+        img1_idx = match.queryIdx
+        img2_idx = match.trainIdx
+        (x1, y1) = keypoints1[img1_idx].pt
+        (x2, y2) = keypoints2[img2_idx].pt
+
+        # Draw circles on the keypoints
+        cv2.circle(output_img, (int(x1), int(y1)), 4, (0, 255, 255), 1)
+        cv2.circle(output_img, (int(x2), int(y2)+r), 4, (0, 255, 255), 1)
+
+        # Connect the same keypoints
+        cv2.line(output_img, (int(x1), int(y1)), (int(x2), int(y2)+r), (0, 255, 255), 1)
+
+    return output_img
+def warpImages(img1, img2, H):
+    rows1, cols1 = img1.shape[:2]
+    rows2, cols2 = img2.shape[:2]
+
+    list_of_points_1 = np.float32([[0, 0], [0, rows1], [cols1, rows1], [cols1, 0]]).reshape(-1, 1, 2)
+    temp_points = np.float32([[0, 0], [0, rows2], [cols2, rows2], [cols2, 0]]).reshape(-1, 1, 2)
+
+    # When we have established a homography we need to warp perspective
+    # Change field of view
+    list_of_points_2 = cv2.perspectiveTransform(temp_points, H)
+
+    list_of_points = np.concatenate((list_of_points_1, list_of_points_2), axis=0)
+
+    [x_min, y_min] = np.int32(list_of_points.min(axis=0).ravel() - 0.5)
+    [x_max, y_max] = np.int32(list_of_points.max(axis=0).ravel() + 0.5)
+
+    translation_dist = [-x_min, -y_min]
+
+    H_translation = np.array([[1, 0, translation_dist[0]], [0, 1, translation_dist[1]], [0, 0, 1]])
+
+    output_img = cv2.warpPerspective(img2, H_translation.dot(H), (x_max - x_min, y_max - y_min))
+    output_img[translation_dist[1]:rows1 + translation_dist[1], translation_dist[0]:cols1 + translation_dist[0]] = img1
+
+    return output_img
+# Load our images
+
+#img1 = cv2.imread("images/1IMG.png")
+#img2 = cv2.imread("images/3IMG.png")
+
+img1 = cv2.imread("Landsat8/StIMG/Result5.JPG")
+img2 = cv2.imread("Landsat8/StIMG/5 (2).JPG")
+
+#kernel = np.ones((5,5),np.uint8)
+
+#img1 = cv2.morphologyEx(img1, cv2.MORPH_OPEN, kernel)
+#img1 = cv2.morphologyEx(img1, cv2.MORPH_CLOSE, kernel)
+
+#img2 = cv2.morphologyEx(img2, cv2.MORPH_OPEN, kernel)
+#img2 = cv2.morphologyEx(img2, cv2.MORPH_CLOSE, kernel)
+
+
+img1_gray = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+img2_gray = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+
+#cv2.imshow("FirstImage", img1_gray)
+#cv2.imshow("SecondImgae", img2_gray)
+# Initiate AKAZE detector
+akaze = cv2.AKAZE_create()
+# Find the keypoints and descriptors with SIFT
+kp1, des1 = akaze.detectAndCompute(img1_gray, None)
+kp2, des2 = akaze.detectAndCompute(img2_gray, None)
+print("keypoints: {}, descriptors: {}".format(len(kp1), des1.shape))
+print("keypoints: {}, descriptors: {}".format(len(kp2), des2.shape))
+# BFMatcher with default params
+bf = cv2.BFMatcher(cv2.NORM_L1)
+matches = bf.knnMatch(des1, des2, k=2)
+all_matches = []
+for m, n in matches:
+    all_matches.append(m)
+
+img3 = draw_matches(img1_gray, kp1, img2_gray, kp2, all_matches[:500])
+
+cv2.imwrite("Landsat8/StIMG/Matching_Points4.JPG", img3)
+# Finding the best matches
+good = []
+for m, n in matches:
+    if m.distance < 0.5 * n.distance:
+        good.append(m)
+img1_GoodKeyP = cv2.drawKeypoints(img1, [kp1[m.queryIdx] for m in good], None, (255, 0, 255))
+img2_GoodKeyP = cv2.drawKeypoints(img2, [kp2[m.queryIdx] for m in good], None, (255, 0, 255))
+cv2.imwrite("Landsat8/StIMG/GoodKeyPoints Img 23.JPG", img1_GoodKeyP)
+cv2.imwrite("Landsat8/StIMG/GoodKeyPoints Img 33.JPG", img2_GoodKeyP)
+MIN_MATCH_COUNT = 4
+
+if len(good) > MIN_MATCH_COUNT:
+    # Convert keypoints to an argument for findHomography
+    src_pts = np.float32([kp1[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
+    dst_pts = np.float32([kp2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
+
+    # Establish a homography
+    M, _ = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
+
+    result = warpImages(img2, img1, M)
+
+    cv2.imwrite("Landsat8/StIMG/Result10.JPG", result)
